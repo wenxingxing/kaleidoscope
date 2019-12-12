@@ -1092,7 +1092,7 @@ Function *FunctionAST::codegen() {
     verifyFunction(*TheFunction);
 
     // Run the optimizer on the function.
-    TheFPM->run(*TheFunction);
+//    TheFPM->run(*TheFunction);
 
     return TheFunction;
   }
