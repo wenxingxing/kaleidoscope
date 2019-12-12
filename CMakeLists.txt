@@ -25,6 +25,7 @@ add_definitions(${LLVM_DEFINITIONS})
 add_executable(ch7 ch7.cpp)
 add_executable(ch9 ch9.cpp)
 add_executable(main main.cpp)
+add_executable(tmp tmp.cpp)
 
 llvm_map_components_to_libnames(llvm_libs support core irreader mcjit native orcjit)
 
@@ -35,3 +36,4 @@ llvm_map_components_to_libnames(llvm_libs support core irreader mcjit native orc
 target_link_libraries(ch7 ${llvm_libs})
 target_link_libraries(ch9 ${llvm_libs})
 target_link_libraries(main ${llvm_libs})
+target_link_libraries(tmp ${llvm_libs})

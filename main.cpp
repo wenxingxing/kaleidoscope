@@ -52,13 +52,29 @@ using namespace llvm::orc;
 static LLVMContext TheContext;
 static IRBuilder<> Builder(TheContext);
 static std::unique_ptr<Module> TheModule;
-static std::map<std::string, Value *> NamedValues;
 static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 
-static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, const std::string &VarName) {
+static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, Type *tp,
+                                          const std::string &VarName) {
     IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
-    return TmpB.CreateAlloca(Type::getDoubleTy(TheContext), nullptr, VarName);
+    return TmpB.CreateAlloca(tp, nullptr, VarName);
+}
+
+struct Foo {
+    int32_t a;
+    int32_t b;
+    int32_t c;
+};
+
+Type *getType() {
+    vector<Type *> tps;
+    tps.push_back(Type::getInt32Ty(TheContext));
+    tps.push_back(Type::getInt32Ty(TheContext));
+    tps.push_back(Type::getInt32Ty(TheContext));
+    StructType *tp = StructType::create(TheContext, tps, "foo_type");
+    tp->print(errs());
+    return tp;
 }
 
 static void InitializeModuleAndPassManager() {
@@ -83,6 +99,12 @@ static void InitializeModuleAndPassManager() {
     TheFPM->doInitialization();
 }
 
+Value *getInt(int val, LLVMContext &ctx) {
+    Type *i32_type = IntegerType::getInt32Ty(ctx);
+    auto ret = ConstantInt::get(i32_type, val, true);
+    return ret;
+}
+
 int main() {
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
@@ -93,8 +115,8 @@ int main() {
     ////////////////////////////////////////////////////////////////////////////////////////////////
     const std::string funcName = "_func_";
 
-    std::vector<Type *> Doubles(1, Type::getDoubleTy(TheContext));
-    FunctionType *FT = FunctionType::get(Type::getDoubleTy(TheContext), Doubles, false);
+    auto inputType = getType();
+    FunctionType *FT = FunctionType::get(Type::getInt32Ty(TheContext), {inputType}, false);
 
     Function *TheFunction =
         Function::Create(FT, Function::ExternalLinkage, funcName, TheModule.get());
@@ -102,31 +124,28 @@ int main() {
     BasicBlock *BB = BasicBlock::Create(TheContext, "entry", TheFunction);
     Builder.SetInsertPoint(BB);
 
-    // Record the function arguments in the NamedValues map.
-    NamedValues.clear();
-    for (auto &Arg : TheFunction->args()) {
-        // Create an alloca for this variable.
-        AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, Arg.getName());
+    auto Arg = TheFunction->arg_begin();
+    AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, inputType, Arg->getName());
+    Builder.CreateStore(Arg, Alloca);
+    auto ptrb =
+        Builder.CreateGEP(inputType, Alloca, {getInt(0, TheContext), getInt(1, TheContext)});
+    auto valb = Builder.CreateLoad(ptrb);
 
-        // Store the initial value into the alloca.
-        Builder.CreateStore(&Arg, Alloca);
+    Builder.CreateRet(valb);
 
-        // Add arguments to variable symbol table.
-        NamedValues[Arg.getName()] = Alloca;
-    }
-    Value *constant = ConstantFP::get(TheContext, APFloat(1.234567));
-
-    Builder.CreateRet(constant);
     verifyFunction(*TheFunction);
-    TheFunction->print(outs());
-    TheFPM->run(*TheFunction);
     TheFunction->print(outs());
 
     TheJIT->addModule(std::move(TheModule));
     auto ExprSymbol = TheJIT->findSymbol(funcName);
     assert(ExprSymbol && "Function not found");
 
-    double (*FP)() = (double (*)())(intptr_t)cantFail(ExprSymbol.getAddress());
+    auto FP = (int32_t(*)(Foo))(intptr_t)cantFail(ExprSymbol.getAddress());
 
-    cout << FP() << endl;
+    Foo f{};
+    f.a = 2;
+    f.b = 5;
+    f.c = 7;
+
+    cout << FP(f) << endl;
 }
