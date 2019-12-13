@@ -140,12 +140,12 @@ int main() {
     auto ExprSymbol = TheJIT->findSymbol(funcName);
     assert(ExprSymbol && "Function not found");
 
-    auto FP = (int32_t(*)(Foo))(intptr_t)cantFail(ExprSymbol.getAddress());
+    auto FPX123FPX123 = (int32_t(*)(Foo))(intptr_t)cantFail(ExprSymbol.getAddress());
 
     Foo f{};
     f.a = 2;
     f.b = 5;
     f.c = 7;
 
-    cout << FP(f) << endl;
+    cout << FPX123FPX123(f) << endl;
 }
